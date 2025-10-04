@@ -9,6 +9,9 @@ interface Web3DashboardProps {
   onConnectWallet: () => void;
   onStakeTokens: (amount: string) => void;
   onUnstakeTokens: (amount: string) => void;
+  onClaimFaucet: () => void;
+  canClaimFaucet: boolean;
+  faucetCooldown: number;
 }
 
 const Web3Dashboard: React.FC<Web3DashboardProps> = ({
@@ -19,7 +22,10 @@ const Web3Dashboard: React.FC<Web3DashboardProps> = ({
   userBadges,
   onConnectWallet,
   onStakeTokens,
-  onUnstakeTokens
+  onUnstakeTokens,
+  onClaimFaucet,
+  canClaimFaucet,
+  faucetCooldown
 }) => {
   const [stakeAmount, setStakeAmount] = React.useState('1000');
   const [unstakeAmount, setUnstakeAmount] = React.useState('1000');
@@ -76,6 +82,39 @@ const Web3Dashboard: React.FC<Web3DashboardProps> = ({
               {isValidator ? '✓ Validator' : 'Not a Validator'}
             </p>
           </div>
+        </div>
+      </div>
+
+      {/* Faucet Section */}
+      <div className="bg-brand-surface border border-brand-border rounded-lg p-6">
+        <h3 className="text-xl font-bold text-brand-text-primary mb-4">🪙 Free Token Faucet</h3>
+        <p className="text-brand-text-secondary mb-4">
+          Get 1000 free ZERIFY tokens to test all features! Available once every 24 hours.
+        </p>
+        
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-brand-text-secondary">
+              {canClaimFaucet ? (
+                <span className="text-brand-success font-semibold">✅ Ready to claim!</span>
+              ) : (
+                <span className="text-brand-warning">
+                  ⏰ Next claim in: {Math.floor(faucetCooldown / 3600)}h {Math.floor((faucetCooldown % 3600) / 60)}m
+                </span>
+              )}
+            </p>
+          </div>
+          <button
+            onClick={onClaimFaucet}
+            disabled={!canClaimFaucet}
+            className={`px-6 py-2 rounded-lg font-semibold transition-colors ${
+              canClaimFaucet
+                ? 'bg-brand-accent text-white hover:bg-brand-accent/90'
+                : 'bg-gray-500 text-gray-300 cursor-not-allowed'
+            }`}
+          >
+            {canClaimFaucet ? 'Claim 1000 Tokens' : 'Claim Unavailable'}
+          </button>
         </div>
       </div>
 

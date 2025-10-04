@@ -16,7 +16,11 @@ const ZERIFY_TOKEN_ABI = [
   "function unstakeTokens(uint256 amount)",
   "function isValidator(address user) view returns (bool)",
   "function getReputation(address user) view returns (uint256)",
-  "event TokensRewarded(address indexed user, uint256 amount, string reason)"
+  "function claimFaucet()",
+  "function canClaimFaucet(address user) view returns (bool)",
+  "function getFaucetCooldown(address user) view returns (uint256)",
+  "event TokensRewarded(address indexed user, uint256 amount, string reason)",
+  "event FaucetClaimed(address indexed user, uint256 amount)"
 ];
 
 const VERIFICATION_REGISTRY_ABI = [
@@ -156,6 +160,40 @@ export const getReputation = async (address: string): Promise<number> => {
     return reputation.toNumber();
   } catch (error) {
     console.error('Failed to get reputation:', error);
+    return 0;
+  }
+};
+
+// Faucet functions
+export const claimFaucet = async (): Promise<void> => {
+  try {
+    const contract = await getContract('ZERIFY_TOKEN', ZERIFY_TOKEN_ABI);
+    const tx = await contract.claimFaucet();
+    await tx.wait();
+    console.log('Faucet claimed successfully');
+  } catch (error) {
+    console.error('Failed to claim faucet:', error);
+    throw error;
+  }
+};
+
+export const canClaimFaucet = async (address: string): Promise<boolean> => {
+  try {
+    const contract = await getContract('ZERIFY_TOKEN', ZERIFY_TOKEN_ABI);
+    return await contract.canClaimFaucet(address);
+  } catch (error) {
+    console.error('Failed to check faucet eligibility:', error);
+    return false;
+  }
+};
+
+export const getFaucetCooldown = async (address: string): Promise<number> => {
+  try {
+    const contract = await getContract('ZERIFY_TOKEN', ZERIFY_TOKEN_ABI);
+    const cooldown = await contract.getFaucetCooldown(address);
+    return cooldown.toNumber();
+  } catch (error) {
+    console.error('Failed to get faucet cooldown:', error);
     return 0;
   }
 };
