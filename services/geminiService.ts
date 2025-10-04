@@ -62,15 +62,18 @@ export const fetchUrlTitle = async (url: string): Promise<string | null> => {
 // FIX: Added performContentIngestion to encapsulate the logic and avoid exporting the `ai` client.
 export const performContentIngestion = async (url: string): Promise<IngestionOutput> => {
     const ingestionPrompt = `
-        You are a Content Ingestion Agent. Your task is to use your search tool to retrieve the main textual content from the web page at the following URL. Do not attempt to access the URL directly yourself.
-        
-        URL: ${url}
+        Use your Google Search tool to find the web page at this URL: ${url}
 
-        After retrieving the content, your response must be a single JSON object inside a markdown code block. The JSON object must have the following structure:
+        After using the search tool, analyze its content and perform the following steps:
+        1. Extract the primary article text from the page.
+        2. If you successfully extract the text, create a JSON object where "success" is true and "text" contains the extracted content.
+        3. If you cannot access the page or extract the text using your search tool, create a JSON object where "success" is false and "reason" explains why (e.g., "The search tool could not find content at this URL," or "The page content appears to be blocked from indexing.").
+
+        Your entire response MUST be a single JSON object inside a markdown code block, matching this exact structure:
         {
           "success": boolean,
-          "text": "The full extracted text of the article goes here. If your search tool cannot access the content, 'success' must be false and 'text' must be an empty string.",
-          "reason": "If success is false, provide a brief, user-friendly reason why the content could not be accessed (e.g., 'Page is protected by a login', 'Content is blocked for crawlers', 'URL appears to be invalid or down'). If success is true, this can be an empty string."
+          "text": "string",
+          "reason": "string"
         }
     `;
     const ai = getAiClient();
@@ -78,6 +81,7 @@ export const performContentIngestion = async (url: string): Promise<IngestionOut
         model: 'gemini-2.5-flash',
         contents: ingestionPrompt,
         config: {
+            systemInstruction: `You are a web content ingestion agent. Your ONLY function is to use the provided Google Search tool to look up a URL and extract its main textual content. You CANNOT access websites directly. You MUST return a JSON object with the specified schema.`,
             tools: [{googleSearch: {}}],
         },
     });
@@ -108,6 +112,9 @@ export const performContentIngestion = async (url: string): Promise<IngestionOut
         }
     } catch (e) {
         console.error("Failed to parse ingestion JSON from model response:", jsonString, e);
+        if (jsonString.includes("I do not have the ability to directly access external websites") || jsonString.includes("I am unable to access external websites")) {
+            throw new Error("The model's search tool was unable to retrieve content from this URL. It may be blocked or inaccessible.");
+        }
         throw new Error("The content ingestion agent failed to process the URL. The model's response was not in the expected format.");
     }
 
@@ -300,7 +307,7 @@ export const performSourceIntelligence = async (domain: string): Promise<SourceI
     });
     
     let jsonString = response.text;
-    const match = jsonString.match(/```json\s*([\s\S]*?)\s*```/);
+    const match = jsonString.match(/```json\s*([\sS]*?)\s*```/);
 
     if (match && match[1]) {
         jsonString = match[1];
