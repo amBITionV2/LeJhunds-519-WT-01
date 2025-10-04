@@ -6,16 +6,29 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "compile": "hardhat compile",
+    "deploy": "hardhat run scripts/deploy.cjs --network hardhat",
+    "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
+    "node": "hardhat node",
+    "test": "hardhat test"
   },
   "dependencies": {
-    "react-dom": "^19.1.1",
+    "@google/genai": "^1.20.0",
+    "@openzeppelin/contracts": "^5.0.0",
+    "ethers": "^6.14.0",
     "react": "^19.1.1",
-    "@google/genai": "^1.20.0"
+    "react-dom": "^19.1.1"
   },
   "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.8",
+    "@nomicfoundation/hardhat-toolbox": "^3.0.0",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "chai": "^4.3.7",
+    "hardhat": "^2.17.1",
+    "ts-node": "^10.9.2",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

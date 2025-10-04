@@ -27,6 +27,29 @@ const getAiClient = (): GoogleGenAI => {
     return ai;
 };
 
+// Fallback data for when API is unavailable
+const getFallbackEmotionAnalysis = (): EmotionAnalysisOutput => ({
+  dominant_emotion: 'Neutral',
+  manipulation_level: 'Low',
+  explanation: 'Analysis unavailable due to API limitations. Please try again later.'
+});
+
+const getFallbackTextualAnalysis = (text: string): TextualAnalysisOutput => ({
+  summary: `Content analysis unavailable. Text length: ${text.length} characters. Please try again later when API is available.`,
+  entities: [],
+  sentiment: 'Neutral',
+  keywords: ['analysis', 'unavailable', 'api', 'error']
+});
+
+const getFallbackSourceIntelligence = (domain: string): SourceIntelligenceOutput => ({
+  source_validity: 'Unknown',
+  evidence: [
+    { description: 'API analysis unavailable', finding: 'Neutral' as const }
+  ],
+  trust_score: 50,
+  source_validity_explanation: 'Unable to analyze source credibility due to API limitations. Please try again later.'
+});
+
 
 export { Chat };
 
@@ -143,33 +166,64 @@ export const performTextualAnalysis = async (text: string): Promise<TextualAnaly
   `;
 
   const ai = getAiClient();
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: prompt,
-    config: {
-      systemInstruction: `You are an expert Textual Analysis AI. Your purpose is to dissect and understand written content with high accuracy. 
-      Perform these tasks:
-        1. Summarize the text in 3-4 concise sentences.
-        2. Extract up to 5 of the most prominent named entities (people, organizations, locations).
-        3. Determine the overall sentiment (Positive, Negative, Neutral).
-        4. List the top 5 most relevant keywords or topics.
-      Your output must conform to the provided JSON schema.`,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          summary: { type: Type.STRING },
-          entities: { type: Type.ARRAY, items: { type: Type.STRING } },
-          sentiment: { type: Type.STRING, enum: ['Positive', 'Negative', 'Neutral'] },
-          keywords: { type: Type.ARRAY, items: { type: Type.STRING } },
-        },
-        required: ['summary', 'entities', 'sentiment', 'keywords'],
-      },
-    }
-  });
   
-  const jsonString = response.text;
-  return JSON.parse(jsonString) as TextualAnalysisOutput;
+  // Retry logic for API overload errors
+  const maxRetries = 3;
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          systemInstruction: `You are an expert Textual Analysis AI. Your purpose is to dissect and understand written content with high accuracy. 
+          Perform these tasks:
+            1. Summarize the text in 3-4 concise sentences.
+            2. Extract up to 5 of the most prominent named entities (people, organizations, locations).
+            3. Determine the overall sentiment (Positive, Negative, Neutral).
+            4. List the top 5 most relevant keywords or topics.
+          Your output must conform to the provided JSON schema.`,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              summary: { type: Type.STRING },
+              entities: { type: Type.ARRAY, items: { type: Type.STRING } },
+              sentiment: { type: Type.STRING, enum: ['Positive', 'Negative', 'Neutral'] },
+              keywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+            },
+            required: ['summary', 'entities', 'sentiment', 'keywords'],
+          },
+        }
+      });
+      
+      const jsonString = response.text;
+      return JSON.parse(jsonString) as TextualAnalysisOutput;
+    } catch (error) {
+      lastError = error as Error;
+      console.warn(`Textual analysis attempt ${attempt} failed:`, error);
+      
+      // Check if it's an API overload error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('overloaded') || errorMessage.includes('quota') || errorMessage.includes('rate limit')) {
+        if (attempt < maxRetries) {
+          // Exponential backoff: wait 2^attempt seconds
+          const delay = Math.pow(2, attempt) * 1000;
+          console.log(`API overloaded, retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      }
+      
+      // If it's not an overload error or we've exhausted retries, throw immediately
+      throw error;
+    }
+  }
+  
+  // If we get here, all retries failed - return fallback data
+  console.warn('Textual analysis failed after all retries, using fallback data');
+  return getFallbackTextualAnalysis(text);
 };
 
 export const performEmotionAnalysis = async (text: string): Promise<EmotionAnalysisOutput> => {
@@ -183,31 +237,62 @@ export const performEmotionAnalysis = async (text: string): Promise<EmotionAnaly
   `;
   
   const ai = getAiClient();
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: prompt,
-    config: {
-      systemInstruction: `You are an Emotion Analysis AI specializing in detecting intent and manipulation. 
-      Analyze the text to perform these tasks:
-        1. Identify the dominant emotion ('Anger', 'Fear', 'Joy', 'Sadness', 'Surprise', 'Neutral', 'Mixed').
-        2. Assess the level of emotional manipulation ('Low', 'Medium', 'High'). 'High' or 'Medium' should be used for content that seems designed to provoke a strong emotional reaction (e.g., outrage, fear, extreme excitement) rather than inform.
-        3. Provide a brief, one-sentence 'explanation' for your assessment.
-      Your output must conform to the provided JSON schema.`,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          dominant_emotion: { type: Type.STRING, enum: ['Anger', 'Fear', 'Joy', 'Sadness', 'Surprise', 'Neutral', 'Mixed'] },
-          manipulation_level: { type: Type.STRING, enum: ['Low', 'Medium', 'High'] },
-          explanation: { type: Type.STRING },
-        },
-        required: ['dominant_emotion', 'manipulation_level', 'explanation'],
-      },
-    }
-  });
   
-  const jsonString = response.text;
-  return JSON.parse(jsonString) as EmotionAnalysisOutput;
+  // Retry logic for API overload errors
+  const maxRetries = 3;
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          systemInstruction: `You are an Emotion Analysis AI specializing in detecting intent and manipulation. 
+          Analyze the text to perform these tasks:
+            1. Identify the dominant emotion ('Anger', 'Fear', 'Joy', 'Sadness', 'Surprise', 'Neutral', 'Mixed').
+            2. Assess the level of emotional manipulation ('Low', 'Medium', 'High'). 'High' or 'Medium' should be used for content that seems designed to provoke a strong emotional reaction (e.g., outrage, fear, extreme excitement) rather than inform.
+            3. Provide a brief, one-sentence 'explanation' for your assessment.
+          Your output must conform to the provided JSON schema.`,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              dominant_emotion: { type: Type.STRING, enum: ['Anger', 'Fear', 'Joy', 'Sadness', 'Surprise', 'Neutral', 'Mixed'] },
+              manipulation_level: { type: Type.STRING, enum: ['Low', 'Medium', 'High'] },
+              explanation: { type: Type.STRING },
+            },
+            required: ['dominant_emotion', 'manipulation_level', 'explanation'],
+          },
+        }
+      });
+      
+      const jsonString = response.text;
+      return JSON.parse(jsonString) as EmotionAnalysisOutput;
+    } catch (error) {
+      lastError = error as Error;
+      console.warn(`Emotion analysis attempt ${attempt} failed:`, error);
+      
+      // Check if it's an API overload error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('overloaded') || errorMessage.includes('quota') || errorMessage.includes('rate limit')) {
+        if (attempt < maxRetries) {
+          // Exponential backoff: wait 2^attempt seconds
+          const delay = Math.pow(2, attempt) * 1000;
+          console.log(`API overloaded, retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      }
+      
+      // If it's not an overload error or we've exhausted retries, throw immediately
+      throw error;
+    }
+  }
+  
+  // If we get here, all retries failed - return fallback data
+  console.warn('Emotion analysis failed after all retries, using fallback data');
+  return getFallbackEmotionAnalysis();
 };
 
 
@@ -291,41 +376,72 @@ export const performSourceIntelligence = async (domain: string): Promise<SourceI
         Your final output must be a single JSON object enclosed in a markdown code block (\`\`\`json).
     `;
     const ai = getAiClient();
-    const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-        config: {
-          systemInstruction: `You are a Source Intelligence Agent. Your goal is to assess the credibility of a web domain using Google Search and provide a structured JSON summary of your findings.
-          Your analysis must include:
-            1. A 'source_validity' rating: 'High' (trust score 80-100), 'Medium' (40-79), 'Low' (0-39), or 'Unknown'.
-            2. An 'evidence' array, containing at least 3 objects with 'description' and 'finding' ('Positive', 'Negative', 'Neutral'). Evidence should be specific (e.g., "Rated 'Mostly Factual' by Media Bias/Fact Check.").
-            3. A 'trust_score', a numerical score from 0 to 100 representing the source's overall reliability.
-            4. A 'source_validity_explanation', a brief, one-sentence justification for the trust score.
-          `,
-          tools: [{googleSearch: {}}],
-        },
-    });
     
-    let jsonString = response.text;
-    const match = jsonString.match(/```json\s*([\sS]*?)\s*```/);
+    // Retry logic for API overload errors
+    const maxRetries = 3;
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+              systemInstruction: `You are a Source Intelligence Agent. Your goal is to assess the credibility of a web domain using Google Search and provide a structured JSON summary of your findings.
+              Your analysis must include:
+                1. A 'source_validity' rating: 'High' (trust score 80-100), 'Medium' (40-79), 'Low' (0-39), or 'Unknown'.
+                2. An 'evidence' array, containing at least 3 objects with 'description' and 'finding' ('Positive', 'Negative', 'Neutral'). Evidence should be specific (e.g., "Rated 'Mostly Factual' by Media Bias/Fact Check.").
+                3. A 'trust_score', a numerical score from 0 to 100 representing the source's overall reliability.
+                4. A 'source_validity_explanation', a brief, one-sentence justification for the trust score.
+              `,
+              tools: [{googleSearch: {}}],
+            },
+        });
+        
+        let jsonString = response.text;
+        const match = jsonString.match(/```json\s*([\sS]*?)\s*```/);
 
-    if (match && match[1]) {
-        jsonString = match[1];
-    } else {
-        // Fallback for when the model doesn't use markdown fences
-        const jsonStart = jsonString.indexOf('{');
-        const jsonEnd = jsonString.lastIndexOf('}');
-        if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-            jsonString = jsonString.substring(jsonStart, jsonEnd + 1);
+        if (match && match[1]) {
+            jsonString = match[1];
+        } else {
+            // Fallback for when the model doesn't use markdown fences
+            const jsonStart = jsonString.indexOf('{');
+            const jsonEnd = jsonString.lastIndexOf('}');
+            if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+                jsonString = jsonString.substring(jsonStart, jsonEnd + 1);
+            }
         }
-    }
 
-    try {
-        return JSON.parse(jsonString) as SourceIntelligenceOutput;
-    } catch (e) {
-        console.error("Failed to parse Source Intelligence JSON:", jsonString);
-        throw new Error("Could not parse the source intelligence analysis from the model's response.");
+        try {
+            return JSON.parse(jsonString) as SourceIntelligenceOutput;
+        } catch (e) {
+            console.error("Failed to parse Source Intelligence JSON:", jsonString);
+            throw new Error("Could not parse the source intelligence analysis from the model's response.");
+        }
+      } catch (error) {
+        lastError = error as Error;
+        console.warn(`Source intelligence analysis attempt ${attempt} failed:`, error);
+        
+        // Check if it's an API overload error
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes('overloaded') || errorMessage.includes('quota') || errorMessage.includes('rate limit')) {
+          if (attempt < maxRetries) {
+            // Exponential backoff: wait 2^attempt seconds
+            const delay = Math.pow(2, attempt) * 1000;
+            console.log(`API overloaded, retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+        }
+        
+        // If it's not an overload error or we've exhausted retries, throw immediately
+        throw error;
+      }
     }
+    
+    // If we get here, all retries failed - return fallback data
+    console.warn('Source intelligence analysis failed after all retries, using fallback data');
+    return getFallbackSourceIntelligence(domain);
 };
 
 

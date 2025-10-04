@@ -14,8 +14,24 @@ import { performTextualAnalysis, performEmotionAnalysis, performVisualAnalysis, 
 import { addMisinformationRecord, getMisinformationRecordByDomain, openDB } from './services/db';
 import { getFriendlyErrorMessage } from './utils';
 import { XMarkIcon, ShieldCheckIcon } from './components/icons/AgentIcons';
-import { addToWatchlist, getWatchlist } from './services/web3Service';
+import { 
+  addToWatchlist, 
+  getWatchlist, 
+  initializeWeb3Services,
+  getTokenBalance,
+  getReputation,
+  isValidator,
+  submitVerification,
+  mintVerifiedSourceBadge,
+  mintTrustedVerifierBadge,
+  mintVerificationCertificate,
+  getUserBadges,
+  stakeTokens,
+  unstakeTokens
+} from './services/web3Service';
+import { uploadJsonToIpfs } from './services/ipfsService';
 import DynamicBackground from './components/DynamicBackground';
+import Web3Dashboard from './components/Web3Dashboard';
 
 // Ethers is loaded from a CDN script in index.html
 declare const ethers: any;
@@ -110,6 +126,11 @@ const App: React.FC<AppProps> = ({ currentUser, onLogout }) => {
   // Web3 State
   const [account, setAccount] = useState<string | null>(null);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [tokenBalance, setTokenBalance] = useState<string>('0');
+  const [reputation, setReputation] = useState<number>(0);
+  const [isValidator, setIsValidator] = useState<boolean>(false);
+  const [userBadges, setUserBadges] = useState<number[]>([]);
+  const [isWeb3Initialized, setIsWeb3Initialized] = useState<boolean>(false);
 
   // Misinformation Memory State
   const [misinformationWarning, setMisinformationWarning] = useState<MisinformationRecord | null>(null);
@@ -145,6 +166,22 @@ const App: React.FC<AppProps> = ({ currentUser, onLogout }) => {
         setWatchlist(data);
     };
     fetchWatchlist();
+
+    // Initialize Web3 services
+    const initWeb3 = async () => {
+      try {
+        // Initialize with a placeholder token - in production, use environment variable
+        await initializeWeb3Services(process.env.WEB3_STORAGE_TOKEN || '');
+        setIsWeb3Initialized(true);
+        console.log('Web3 services initialized successfully');
+      } catch (error) {
+        console.error('Failed to initialize Web3 services:', error);
+        // Continue without Web3 features
+        setIsWeb3Initialized(false);
+      }
+    };
+    
+    initWeb3();
 
   }, [historyKey]);
 
@@ -256,14 +293,42 @@ const App: React.FC<AppProps> = ({ currentUser, onLogout }) => {
         return;
     }
     try {
-        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const provider = new ethers.BrowserProvider(window.ethereum);
         const accounts = await provider.send("eth_requestAccounts", []);
         if (accounts.length > 0) {
             setAccount(accounts[0]);
+            
+            // Load Web3 user data
+            if (isWeb3Initialized) {
+              await loadUserWeb3Data(accounts[0]);
+            }
         }
     } catch (error) {
         console.error("Failed to connect wallet:", error);
         alert("Failed to connect wallet. Please try again.");
+    }
+  };
+
+  const loadUserWeb3Data = async (userAddress: string) => {
+    try {
+      // Load token balance
+      const balance = await getTokenBalance(userAddress);
+      setTokenBalance(balance);
+      
+      // Load reputation
+      const userReputation = await getReputation(userAddress);
+      setReputation(userReputation);
+      
+      // Check if user is validator
+      const validatorStatus = await isValidator(userAddress);
+      setIsValidator(validatorStatus);
+      
+      // Load user badges
+      const badges = await getUserBadges(userAddress);
+      setUserBadges(badges);
+      
+    } catch (error) {
+      console.error('Failed to load user Web3 data:', error);
     }
   };
 
@@ -287,6 +352,40 @@ const App: React.FC<AppProps> = ({ currentUser, onLogout }) => {
         // Refresh watchlist data
         const data = await getWatchlist();
         setWatchlist(data);
+    }
+  };
+
+  const handleStakeTokens = async (amount: string) => {
+    if (!account) {
+        await connectWallet();
+        return;
+    }
+
+    try {
+        await stakeTokens(amount);
+        // Refresh user data
+        await loadUserWeb3Data(account);
+        alert('Tokens staked successfully!');
+    } catch (error) {
+        console.error('Failed to stake tokens:', error);
+        alert('Failed to stake tokens. Please try again.');
+    }
+  };
+
+  const handleUnstakeTokens = async (amount: string) => {
+    if (!account) {
+        await connectWallet();
+        return;
+    }
+
+    try {
+        await unstakeTokens(amount);
+        // Refresh user data
+        await loadUserWeb3Data(account);
+        alert('Tokens unstaked successfully!');
+    } catch (error) {
+        console.error('Failed to unstake tokens:', error);
+        alert('Failed to unstake tokens. Please try again.');
     }
   };
 
@@ -443,6 +542,54 @@ const App: React.FC<AppProps> = ({ currentUser, onLogout }) => {
       }
       updateAndTrackStatus(AgentName.FINAL_SYNTHESIS, AgentStatus.COMPLETED, "Brief generated successfully");
       
+      // 7. Web3 Integration - Submit to blockchain if Web3 is initialized
+      if (isWeb3Initialized && account && currentAnalysisResults.source) {
+        try {
+          updateAndTrackStatus(AgentName.FINAL_SYNTHESIS, AgentStatus.RUNNING, "Submitting to blockchain...");
+          
+          // Upload full report to IPFS
+          const reportData = {
+            report: fullReport,
+            analysisResults: currentAnalysisResults,
+            timestamp: new Date().toISOString(),
+            reporter: account
+          };
+          const ipfsHash = await uploadJsonToIpfs(reportData);
+          
+          // Submit verification to smart contract
+          await submitVerification(
+            submittedUrl || '',
+            currentAnalysisResults.ingestion?.domain || '',
+            currentAnalysisResults.source.trust_score,
+            ipfsHash
+          );
+          
+          // Mint NFT badge if trust score is high enough
+          if (currentAnalysisResults.source.trust_score >= 80) {
+            await mintVerifiedSourceBadge(
+              currentAnalysisResults.ingestion?.domain || '',
+              currentAnalysisResults.source.trust_score,
+              ipfsHash,
+              account
+            );
+          }
+          
+          // Mint verification certificate
+          await mintVerificationCertificate(
+            currentAnalysisResults.ingestion?.domain || '',
+            currentAnalysisResults.source.trust_score,
+            ipfsHash,
+            account
+          );
+          
+          updateAndTrackStatus(AgentName.FINAL_SYNTHESIS, AgentStatus.COMPLETED, "Blockchain submission complete");
+          
+        } catch (error) {
+          console.error('Web3 submission failed:', error);
+          // Continue without failing the entire pipeline
+        }
+      }
+      
       const newHistoryItem: HistoryItem = {
         id: new Date().toISOString(),
         url: submittedUrl || (textInput ? "Direct Text Input" : (imageFile ? imageFile.name : videoFile!.name)),
@@ -497,16 +644,28 @@ const App: React.FC<AppProps> = ({ currentUser, onLogout }) => {
             userFacingError = `Content Ingestion failed: ${friendlyMessage}. Please check if the URL is correct and publicly accessible.`;
             break;
           case AgentName.TEXTUAL_ANALYSIS:
-            userFacingError = `Textual Analysis failed. The content from the source might be malformed or empty. Details: ${friendlyMessage}`;
+            if (friendlyMessage.includes('overloaded') || friendlyMessage.includes('quota')) {
+              userFacingError = `Textual Analysis temporarily unavailable due to high API demand. The analysis will continue with limited data. Please try again later for full analysis.`;
+            } else {
+              userFacingError = `Textual Analysis failed. The content from the source might be malformed or empty. Details: ${friendlyMessage}`;
+            }
             break;
           case AgentName.EMOTION_ANALYSIS:
-            userFacingError = `Emotion Analysis failed. The model could not determine the emotional tone of the content. Details: ${friendlyMessage}`;
+            if (friendlyMessage.includes('overloaded') || friendlyMessage.includes('quota')) {
+              userFacingError = `Emotion Analysis temporarily unavailable due to high API demand. The analysis will continue with limited data. Please try again later for full analysis.`;
+            } else {
+              userFacingError = `Emotion Analysis failed. The model could not determine the emotional tone of the content. Details: ${friendlyMessage}`;
+            }
             break;
           case AgentName.VISUAL_ANALYSIS:
             userFacingError = `Visual Analysis failed. The uploaded media might be corrupted or in an unsupported format. Details: ${friendlyMessage}`;
             break;
           case AgentName.SOURCE_INTELLIGENCE:
-            userFacingError = `Source Intelligence failed. The model could not verify the source's credibility, which can happen with new or obscure domains. Details: ${friendlyMessage}`;
+            if (friendlyMessage.includes('overloaded') || friendlyMessage.includes('quota')) {
+              userFacingError = `Source Intelligence temporarily unavailable due to high API demand. The analysis will continue with limited data. Please try again later for full analysis.`;
+            } else {
+              userFacingError = `Source Intelligence failed. The model could not verify the source's credibility, which can happen with new or obscure domains. Details: ${friendlyMessage}`;
+            }
             break;
           case AgentName.FINAL_SYNTHESIS:
             userFacingError = `Final Synthesis failed. The model could not generate a brief from the collected data. Details: ${friendlyMessage}`;
@@ -599,6 +758,20 @@ const App: React.FC<AppProps> = ({ currentUser, onLogout }) => {
             
             <main>
                 <URLInput onSubmit={handleRunPipeline} isLoading={isLoading} />
+
+                {/* Web3 Dashboard */}
+                <div className="max-w-6xl mx-auto my-8">
+                  <Web3Dashboard
+                    account={account}
+                    tokenBalance={tokenBalance}
+                    reputation={reputation}
+                    isValidator={isValidator}
+                    userBadges={userBadges}
+                    onConnectWallet={connectWallet}
+                    onStakeTokens={handleStakeTokens}
+                    onUnstakeTokens={handleUnstakeTokens}
+                  />
+                </div>
 
                 {misinformationWarning && (
                     <div className="max-w-3xl mx-auto my-4 p-4 bg-yellow-900/50 border border-brand-warning text-brand-warning rounded-lg flex items-start gap-4" role="alert">
