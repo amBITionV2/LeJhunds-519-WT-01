@@ -9,9 +9,16 @@
     "preview": "vite preview",
     "compile": "hardhat compile",
     "deploy": "hardhat run scripts/deploy.cjs --network hardhat",
+    "deploy:faucet": "hardhat run scripts/deploy-with-faucet.cjs --network hardhat",
     "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
     "node": "hardhat node",
-    "test": "hardhat test"
+    "test": "hardhat test",
+    "start:local": "node scripts/start-local.cjs",
+    "quick:deploy": "node scripts/quick-deploy.cjs",
+    "setup:metamask": "node scripts/setup-metamask.js",
+    "fix:deps": "node scripts/fix-dependencies.cjs",
+    "fix:localhost": "node scripts/fix-localhost.cjs",
+    "troubleshoot": "node scripts/troubleshoot.cjs"
   },
   "dependencies": {
     "@google/genai": "^1.20.0",
@@ -22,6 +29,7 @@
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
+    "@nomicfoundation/hardhat-ethers": "^3.1.0",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.8",
     "@nomicfoundation/hardhat-toolbox": "^3.0.0",
     "@types/node": "^22.14.0",

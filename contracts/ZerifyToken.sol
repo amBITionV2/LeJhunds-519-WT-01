@@ -19,11 +19,17 @@ contract ZerifyToken is ERC20, Ownable, Pausable {
     mapping(address => bool) public validators;
     mapping(address => uint256) public reputation;
     
+    // Faucet system
+    uint256 public constant FAUCET_AMOUNT = 1000 * 10**18; // 1000 tokens
+    uint256 public constant FAUCET_COOLDOWN = 24 hours; // 24 hour cooldown
+    mapping(address => uint256) public lastFaucetClaim;
+    
     event TokensRewarded(address indexed user, uint256 amount, string reason);
     event TokensStaked(address indexed user, uint256 amount);
     event TokensUnstaked(address indexed user, uint256 amount);
     event ValidatorRegistered(address indexed user);
     event ReputationUpdated(address indexed user, uint256 newReputation);
+    event FaucetClaimed(address indexed user, uint256 amount);
     
     constructor() ERC20("Zerify Token", "ZERIFY") Ownable(msg.sender) {
         _mint(msg.sender, INITIAL_SUPPLY);
@@ -108,5 +114,40 @@ contract ZerifyToken is ERC20, Ownable, Pausable {
      */
     function getReputation(address user) external view returns (uint256) {
         return reputation[user];
+    }
+    
+    /**
+     * @dev Claim free tokens from the faucet
+     * Users can claim 1000 tokens once every 24 hours
+     */
+    function claimFaucet() external {
+        require(block.timestamp >= lastFaucetClaim[msg.sender] + FAUCET_COOLDOWN, "Faucet cooldown not expired");
+        require(balanceOf(msg.sender) < FAUCET_AMOUNT, "Already have enough tokens");
+        
+        lastFaucetClaim[msg.sender] = block.timestamp;
+        _mint(msg.sender, FAUCET_AMOUNT);
+        
+        emit FaucetClaimed(msg.sender, FAUCET_AMOUNT);
+    }
+    
+    /**
+     * @dev Check if a user can claim from the faucet
+     * @param user The address to check
+     * @return Whether the user can claim from the faucet
+     */
+    function canClaimFaucet(address user) external view returns (bool) {
+        return block.timestamp >= lastFaucetClaim[user] + FAUCET_COOLDOWN && balanceOf(user) < FAUCET_AMOUNT;
+    }
+    
+    /**
+     * @dev Get the time until next faucet claim is available
+     * @param user The address to check
+     * @return Time in seconds until next claim is available (0 if available now)
+     */
+    function getFaucetCooldown(address user) external view returns (uint256) {
+        if (block.timestamp >= lastFaucetClaim[user] + FAUCET_COOLDOWN) {
+            return 0;
+        }
+        return (lastFaucetClaim[user] + FAUCET_COOLDOWN) - block.timestamp;
     }
 }

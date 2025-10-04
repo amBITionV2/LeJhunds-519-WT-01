@@ -27,7 +27,10 @@ import {
   mintVerificationCertificate,
   getUserBadges,
   stakeTokens,
-  unstakeTokens
+  unstakeTokens,
+  claimFaucet,
+  canClaimFaucet,
+  getFaucetCooldown
 } from './services/web3Service';
 import { uploadJsonToIpfs } from './services/ipfsService';
 import DynamicBackground from './components/DynamicBackground';
@@ -131,6 +134,10 @@ const App: React.FC<AppProps> = ({ currentUser, onLogout }) => {
   const [isValidator, setIsValidator] = useState<boolean>(false);
   const [userBadges, setUserBadges] = useState<number[]>([]);
   const [isWeb3Initialized, setIsWeb3Initialized] = useState<boolean>(false);
+  
+  // Faucet State
+  const [canClaimFaucet, setCanClaimFaucet] = useState<boolean>(false);
+  const [faucetCooldown, setFaucetCooldown] = useState<number>(0);
 
   // Misinformation Memory State
   const [misinformationWarning, setMisinformationWarning] = useState<MisinformationRecord | null>(null);
@@ -184,6 +191,27 @@ const App: React.FC<AppProps> = ({ currentUser, onLogout }) => {
     initWeb3();
 
   }, [historyKey]);
+
+  // Faucet cooldown timer
+  useEffect(() => {
+    if (!account || faucetCooldown <= 0) return;
+
+    const timer = setInterval(async () => {
+      try {
+        const cooldown = await getFaucetCooldown(account);
+        setFaucetCooldown(cooldown);
+        
+        if (cooldown <= 0) {
+          const faucetEligible = await canClaimFaucet(account);
+          setCanClaimFaucet(faucetEligible);
+        }
+      } catch (error) {
+        console.error('Failed to update faucet cooldown:', error);
+      }
+    }, 1000); // Update every second
+
+    return () => clearInterval(timer);
+  }, [account, faucetCooldown]);
 
   const resetAnalysisState = () => {
     setView('analysis');
@@ -327,6 +355,13 @@ const App: React.FC<AppProps> = ({ currentUser, onLogout }) => {
       const badges = await getUserBadges(userAddress);
       setUserBadges(badges);
       
+      // Load faucet data
+      const faucetEligible = await canClaimFaucet(userAddress);
+      setCanClaimFaucet(faucetEligible);
+      
+      const cooldown = await getFaucetCooldown(userAddress);
+      setFaucetCooldown(cooldown);
+      
     } catch (error) {
       console.error('Failed to load user Web3 data:', error);
     }
@@ -374,18 +409,35 @@ const App: React.FC<AppProps> = ({ currentUser, onLogout }) => {
 
   const handleUnstakeTokens = async (amount: string) => {
     if (!account) {
-        await connectWallet();
-        return;
+      await connectWallet();
+      return;
     }
 
     try {
-        await unstakeTokens(amount);
-        // Refresh user data
-        await loadUserWeb3Data(account);
-        alert('Tokens unstaked successfully!');
+      await unstakeTokens(amount);
+      // Refresh user data
+      await loadUserWeb3Data(account);
+      alert('Tokens unstaked successfully!');
     } catch (error) {
-        console.error('Failed to unstake tokens:', error);
-        alert('Failed to unstake tokens. Please try again.');
+      console.error('Failed to unstake tokens:', error);
+      alert('Failed to unstake tokens. Please try again.');
+    }
+  };
+
+  const handleClaimFaucet = async () => {
+    if (!account) {
+      await connectWallet();
+      return;
+    }
+
+    try {
+      await claimFaucet();
+      // Refresh user data
+      await loadUserWeb3Data(account);
+      alert('1000 ZERIFY tokens claimed successfully! You can now test all features.');
+    } catch (error) {
+      console.error('Failed to claim faucet:', error);
+      alert('Failed to claim faucet. Please try again.');
     }
   };
 
@@ -770,6 +822,9 @@ const App: React.FC<AppProps> = ({ currentUser, onLogout }) => {
                     onConnectWallet={connectWallet}
                     onStakeTokens={handleStakeTokens}
                     onUnstakeTokens={handleUnstakeTokens}
+                    onClaimFaucet={handleClaimFaucet}
+                    canClaimFaucet={canClaimFaucet}
+                    faucetCooldown={faucetCooldown}
                   />
                 </div>
 
