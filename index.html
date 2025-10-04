@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zerify</title>
+    <script>
+      // Shim for process.env.API_KEY for local development without a build step.
+      // In a real production environment, this would be handled by a build process.
+      // For this local setup, replace the empty string with your Gemini API key.
+      // IMPORTANT: Do not commit your API key to version control.
+      window.process = {
+        env: {
+          API_KEY: "" // PASTE YOUR GEMINI API KEY HERE
+        }
+      };
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              'brand-bg': 'hsl(var(--brand-bg))',
+              'brand-surface': 'hsl(var(--brand-surface))',
+              'brand-border': 'hsl(var(--brand-border))',
+              'brand-text-primary': 'hsl(var(--brand-text-primary))',
+              'brand-text-secondary': 'hsl(var(--brand-text-secondary))',
+              'brand-accent': 'hsl(var(--brand-accent))',
+              'brand-success': 'hsl(var(--brand-success))',
+              'brand-error': 'hsl(var(--brand-error))',
+              'brand-warning': 'hsl(var(--brand-warning))',
+            },
+            fontFamily: {
+              mono: ['"Roboto Mono"', 'monospace'],
+              body: ['system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', '"Noto Sans"', 'sans-serif'],
+            },
+            animation: {
+              'spin-slow': 'spin 3s linear infinite',
+              'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'scan': 'scan 3s ease-in-out infinite alternate',
+              'binary-rain': 'binary-rain 10s linear infinite',
+              'fade-in': 'fade-in 0.6s ease-out forwards',
+            },
+            keyframes: {
+              scan: {
+                '0%': { top: '0%' },
+                '100%': { top: 'calc(100% - 4px)' },
+              },
+              'binary-rain': {
+                '0%': { transform: 'translateY(-100%)', opacity: '0' },
+                '10%': { opacity: '1' },
+                '90%': { opacity: '1' },
+                '100%': { transform: 'translateY(100vh)', opacity: '0' },
+              },
+              'fade-in': {
+                '0%': { opacity: '0', transform: 'translateY(10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0px)' },
+              }
+            },
+            boxShadow: {
+              'glow': '0 0 15px hsl(var(--brand-accent) / 0.5)',
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      :root {
+        --brand-bg: 0 0% 100%; /* white */
+        --brand-surface: 0 0% 98%; /* off-white */
+        --brand-border: 215 20% 80%; /* light grey */
+        --brand-text-primary: 220 20% 10%; /* almost black */
+        --brand-text-secondary: 220 10% 40%; /* dark grey */
+        --brand-accent: 210 100% 50%; /* vibrant blue */
+        --brand-success: 145 63% 42%; /* green */
+        --brand-error: 0 84% 60%; /* red */
+        --brand-warning: 38 92% 50%; /* orange */
+      }
+      .dark {
+        --brand-bg: 0 0% 0%; /* black */
+        --brand-surface: 0 0% 3.9%; /* off-black */
+        --brand-border: 151 100% 50% / 0.2; /* transparent green */
+        --brand-text-primary: 0 0% 87.8%; /* light grey */
+        --brand-text-secondary: 0 0% 62.7%; /* grey */
+        --brand-accent: 151 100% 50%; /* green */
+        --brand-success: 142 76% 42%; /* green */
+        --brand-error: 0 84% 60%; /* red */
+        --brand-warning: 48 96% 50%; /* orange */
+      }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.20.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-brand-bg text-brand-text-primary transition-colors duration-300 font-mono">
+    <div class="fixed inset-0 pointer-events-none z-[100] dark:opacity-100 opacity-0 transition-opacity duration-300" style="background-image: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.03)); background-size: 100% 3px, 4px 100%;"></div>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

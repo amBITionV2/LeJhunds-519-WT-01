@@ -1,0 +1,7 @@
+{
+  "name": "Zerify2",
+  "description": "Zerify uses a multi-agent system to analyze web content, verify sources, and produce actionable intelligence briefs to combat misinformation. Truth. Verified. Zerified.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
