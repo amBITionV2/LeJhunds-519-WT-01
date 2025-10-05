@@ -7,7 +7,7 @@ import HistorySidebar from './components/HistorySidebar';
 import FollowUpChat from './components/FollowUpChat';
 import ComparisonReportDisplay from './components/ComparisonReportDisplay';
 import WatchlistPage from './pages/WatchlistPage';
-import { AgentName, AgentStatus, PipelineState, AnalysisResults, IngestionOutput, HistoryItem, TextualAnalysisOutput, VisualAnalysisOutput, ChatMessage, EmotionAnalysisOutput, MisinformationRecord, WatchlistItem } from './types';
+import { AgentName, AgentStatus, PipelineState, AnalysisResults, IngestionOutput, HistoryItem, TextualAnalysisOutput, VisualAnalysisOutput, ChatMessage, EmotionAnalysisOutput, MisinformationRecord, WatchlistItem, StakeTransaction, ReputationVote, ReputationNFT, ReputationStake } from './types';
 import { INITIAL_PIPELINE_STATE } from './constants';
 // FIX: Removed `ai` import and added `performContentIngestion` to fix module export error.
 import { performTextualAnalysis, performEmotionAnalysis, performVisualAnalysis, generateFinalBrief, performSourceIntelligence, performContentIngestion, startFollowUpChat, Chat, generateComparisonBrief } from './services/geminiService';
@@ -34,7 +34,8 @@ import {
 } from './services/web3Service';
 import { uploadJsonToIpfs } from './services/ipfsService';
 import DynamicBackground from './components/DynamicBackground';
-import Web3Dashboard from './components/Web3Dashboard';
+import Web3Window from './components/Web3Window';
+import ReputationSystem from './components/ReputationSystem';
 
 // Ethers is loaded from a CDN script in index.html
 declare const ethers: any;
@@ -138,6 +139,15 @@ const App: React.FC<AppProps> = ({ currentUser, onLogout }) => {
   // Faucet State
   const [canClaimFaucet, setCanClaimFaucet] = useState<boolean>(false);
   const [faucetCooldown, setFaucetCooldown] = useState<number>(0);
+  
+  // Stake History State
+  const [stakeHistory, setStakeHistory] = useState<StakeTransaction[]>([]);
+  
+  // Reputation System State
+  const [reputationVotes, setReputationVotes] = useState<ReputationVote[]>([]);
+  const [reputationNFTs, setReputationNFTs] = useState<ReputationNFT[]>([]);
+  const [reputationStakes, setReputationStakes] = useState<ReputationStake[]>([]);
+  const [sourceCredibility, setSourceCredibility] = useState<{[source: string]: number}>({});
 
   // Misinformation Memory State
   const [misinformationWarning, setMisinformationWarning] = useState<MisinformationRecord | null>(null);
@@ -337,6 +347,116 @@ const App: React.FC<AppProps> = ({ currentUser, onLogout }) => {
     }
   };
 
+  const disconnectWallet = () => {
+    setAccount(null);
+    setTokenBalance(0);
+    setReputation(0);
+    setIsValidator(false);
+    setUserBadges([]);
+    setCanClaimFaucet(false);
+    setFaucetCooldown(0);
+    setReputationVotes([]);
+    setReputationNFTs([]);
+    setReputationStakes([]);
+    setSourceCredibility({});
+  };
+
+  // Reputation System Functions
+  const handleVote = async (source: string, credibility: number) => {
+    if (!account) return;
+
+    const vote: ReputationVote = {
+      id: Date.now().toString(),
+      voter: account,
+      source,
+      credibility,
+      timestamp: Date.now(),
+      weight: Math.min(reputation / 10, 10) // Weight based on reputation
+    };
+
+    setReputationVotes(prev => [vote, ...prev]);
+    
+    // Update source credibility
+    setSourceCredibility(prev => {
+      const current = prev[source] || 5;
+      const newCredibility = (current + credibility) / 2;
+      return { ...prev, [source]: newCredibility };
+    });
+
+    // Award reputation for voting
+    setReputation(prev => prev + 1);
+  };
+
+  const handleMintNFT = async (source: string, reputationAmount: number) => {
+    if (!account || reputationAmount < 10) return;
+
+    const nft: ReputationNFT = {
+      id: Date.now().toString(),
+      owner: account,
+      reputation: reputationAmount,
+      source,
+      mintedAt: Date.now(),
+      tokenId: `REP-${Date.now()}`,
+      metadata: {
+        name: `${source} Reputation NFT`,
+        description: `Reputation NFT for ${source} with ${reputationAmount} reputation points`,
+        image: `https://api.dicebear.com/7.x/identicon/svg?seed=${source}`,
+        attributes: [
+          { trait_type: 'Source', value: source },
+          { trait_type: 'Reputation', value: reputationAmount },
+          { trait_type: 'Tier', value: reputationAmount >= 100 ? 'Rare' : 'Common' }
+        ]
+      }
+    };
+
+    setReputationNFTs(prev => [nft, ...prev]);
+    setReputation(prev => prev - 10); // Cost to mint NFT
+  };
+
+  const handleTransferNFT = async (tokenId: string, to: string) => {
+    setReputationNFTs(prev => 
+      prev.map(nft => 
+        nft.tokenId === tokenId 
+          ? { ...nft, owner: to }
+          : nft
+      )
+    );
+  };
+
+  const handleStakeReputation = async (source: string, amount: number, duration: number) => {
+    if (!account) return;
+
+    const stake: ReputationStake = {
+      id: Date.now().toString(),
+      staker: account,
+      source,
+      amount,
+      timestamp: Date.now(),
+      duration,
+      rewards: Math.floor(amount * 0.01 * duration),
+      status: 'active'
+    };
+
+    setReputationStakes(prev => [stake, ...prev]);
+    setReputation(prev => prev - amount);
+  };
+
+  const handleUnstakeReputation = async (stakeId: string) => {
+    setReputationStakes(prev => 
+      prev.map(stake => 
+        stake.id === stakeId 
+          ? { ...stake, status: 'withdrawn' }
+          : stake
+      )
+    );
+    
+    // Award rewards
+    const stake = reputationStakes.find(s => s.id === stakeId);
+    if (stake) {
+      setReputation(prev => prev + stake.amount + stake.rewards);
+    }
+  };
+
   const loadUserWeb3Data = async (userAddress: string) => {
     try {
       // Load token balance
@@ -396,13 +516,35 @@ const App: React.FC<AppProps> = ({ currentUser, onLogout }) => {
         return;
     }
 
+    // Add pending transaction to history
+    const stakeTransaction: StakeTransaction = {
+      id: Date.now().toString(),
+      type: 'stake',
+      amount,
+      timestamp: Date.now(),
+      status: 'pending'
+    };
+    setStakeHistory(prev => [stakeTransaction, ...prev]);
+
     try {
-        await stakeTokens(amount);
+        const txHash = await stakeTokens(amount);
+        // Update transaction status
+        setStakeHistory(prev => prev.map(tx => 
+          tx.id === stakeTransaction.id 
+            ? { ...tx, status: 'completed', txHash }
+            : tx
+        ));
         // Refresh user data
         await loadUserWeb3Data(account);
         alert('Tokens staked successfully!');
     } catch (error) {
         console.error('Failed to stake tokens:', error);
+        // Update transaction status to failed
+        setStakeHistory(prev => prev.map(tx => 
+          tx.id === stakeTransaction.id 
+            ? { ...tx, status: 'failed' }
+            : tx
+        ));
         alert('Failed to stake tokens. Please try again.');
     }
   };
@@ -413,13 +555,35 @@ const App: React.FC<AppProps> = ({ currentUser, onLogout }) => {
       return;
     }
 
+    // Add pending transaction to history
+    const unstakeTransaction: StakeTransaction = {
+      id: Date.now().toString(),
+      type: 'unstake',
+      amount,
+      timestamp: Date.now(),
+      status: 'pending'
+    };
+    setStakeHistory(prev => [unstakeTransaction, ...prev]);
+
     try {
-      await unstakeTokens(amount);
+      const txHash = await unstakeTokens(amount);
+      // Update transaction status
+      setStakeHistory(prev => prev.map(tx => 
+        tx.id === unstakeTransaction.id 
+          ? { ...tx, status: 'completed', txHash }
+          : tx
+      ));
       // Refresh user data
       await loadUserWeb3Data(account);
       alert('Tokens unstaked successfully!');
     } catch (error) {
       console.error('Failed to unstake tokens:', error);
+      // Update transaction status to failed
+      setStakeHistory(prev => prev.map(tx => 
+        tx.id === unstakeTransaction.id 
+          ? { ...tx, status: 'failed' }
+          : tx
+      ));
       alert('Failed to unstake tokens. Please try again.');
     }
   };
@@ -811,22 +975,30 @@ const App: React.FC<AppProps> = ({ currentUser, onLogout }) => {
             <main>
                 <URLInput onSubmit={handleRunPipeline} isLoading={isLoading} />
 
-                {/* Web3 Dashboard */}
-                <div className="max-w-6xl mx-auto my-8">
-                  <Web3Dashboard
-                    account={account}
-                    tokenBalance={tokenBalance}
-                    reputation={reputation}
-                    isValidator={isValidator}
-                    userBadges={userBadges}
-                    onConnectWallet={connectWallet}
-                    onStakeTokens={handleStakeTokens}
-                    onUnstakeTokens={handleUnstakeTokens}
-                    onClaimFaucet={handleClaimFaucet}
-                    canClaimFaucet={canClaimFaucet}
-                    faucetCooldown={faucetCooldown}
-                  />
-                </div>
+                {/* Web3 Window */}
+                <Web3Window
+                  account={account}
+                  tokenBalance={tokenBalance}
+                  reputation={reputation}
+                  isValidator={isValidator}
+                  userBadges={userBadges}
+                  onConnectWallet={connectWallet}
+                  onDisconnectWallet={disconnectWallet}
+                  onStakeTokens={handleStakeTokens}
+                  onUnstakeTokens={handleUnstakeTokens}
+                  onClaimFaucet={handleClaimFaucet}
+                  canClaimFaucet={canClaimFaucet}
+                  faucetCooldown={faucetCooldown}
+                  stakeHistory={stakeHistory}
+                  reputationVotes={reputationVotes}
+                  reputationNFTs={reputationNFTs}
+                  reputationStakes={reputationStakes}
+                  onVote={handleVote}
+                  onMintNFT={handleMintNFT}
+                  onTransferNFT={handleTransferNFT}
+                  onStakeReputation={handleStakeReputation}
+                  onUnstakeReputation={handleUnstakeReputation}
+                />
 
                 {misinformationWarning && (
                     <div className="max-w-3xl mx-auto my-4 p-4 bg-yellow-900/50 border border-brand-warning text-brand-warning rounded-lg flex items-start gap-4" role="alert">
@@ -899,6 +1071,7 @@ const App: React.FC<AppProps> = ({ currentUser, onLogout }) => {
         isComparing={isComparing}
         onShowWatchlist={() => setView('watchlist')}
         onConnectWallet={connectWallet}
+        onDisconnectWallet={disconnectWallet}
         account={account}
       />
       <div className="flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto">

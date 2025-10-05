@@ -7,6 +7,7 @@ interface Web3DashboardProps {
   isValidator: boolean;
   userBadges: number[];
   onConnectWallet: () => void;
+  onDisconnectWallet: () => void;
   onStakeTokens: (amount: string) => void;
   onUnstakeTokens: (amount: string) => void;
   onClaimFaucet: () => void;
@@ -21,6 +22,7 @@ const Web3Dashboard: React.FC<Web3DashboardProps> = ({
   isValidator,
   userBadges,
   onConnectWallet,
+  onDisconnectWallet,
   onStakeTokens,
   onUnstakeTokens,
   onClaimFaucet,
@@ -82,6 +84,14 @@ const Web3Dashboard: React.FC<Web3DashboardProps> = ({
               {isValidator ? '✓ Validator' : 'Not a Validator'}
             </p>
           </div>
+        </div>
+        <div className="mt-4 pt-4 border-t border-brand-border">
+          <button
+            onClick={onDisconnectWallet}
+            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Disconnect Wallet
+          </button>
         </div>
       </div>
 
