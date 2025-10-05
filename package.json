@@ -11,6 +11,7 @@
     "deploy": "hardhat run scripts/deploy.cjs --network hardhat",
     "deploy:faucet": "hardhat run scripts/deploy-with-faucet.cjs --network hardhat",
     "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
+    "deploy:testnet": "node scripts/deploy-testnet.cjs",
     "node": "hardhat node",
     "test": "hardhat test",
     "start:local": "node scripts/start-local.cjs",
