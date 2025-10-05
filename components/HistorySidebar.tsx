@@ -21,13 +21,14 @@ interface HistorySidebarProps {
   isComparing: boolean;
   onShowWatchlist: () => void;
   onConnectWallet: () => void;
+  onDisconnectWallet: () => void;
   account: string | null;
 }
 
 const HistorySidebar: React.FC<HistorySidebarProps> = ({ 
     history, onSelectItem, onClearHistory, onNewAnalysis, activeItemId, currentUser, onLogout,
     isCompareMode, onToggleCompareMode, selectedIds, onSelectItemForCompare, onRunComparison, isComparing,
-    onShowWatchlist, onConnectWallet, account
+    onShowWatchlist, onConnectWallet, onDisconnectWallet, account
  }) => {
   return (
     <aside className="w-full md:w-80 bg-brand-surface h-auto md:h-screen flex flex-col border-b md:border-b-0 md:border-r border-brand-border p-4 shrink-0">
@@ -166,6 +167,12 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({
                 <div className="w-full bg-brand-bg border border-brand-success/50 p-2 rounded-lg text-center">
                     <p className="text-sm font-semibold text-brand-success">Wallet Connected</p>
                     <p className="text-xs text-brand-text-secondary font-mono truncate" title={account}>{account}</p>
+                    <button 
+                        onClick={onDisconnectWallet}
+                        className="mt-2 px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
+                    >
+                        Disconnect
+                    </button>
                 </div>
                 ) : (
                 <button onClick={onConnectWallet} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-500 transition-colors">

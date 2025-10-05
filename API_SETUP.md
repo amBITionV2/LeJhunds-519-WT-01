@@ -20,16 +20,6 @@ To fix the "Gemini API key is not set" error, follow these steps:
    ```
 3. Save the file and restart your development server
 
-### 3. Alternative: Direct Configuration
-
-If you prefer to set it directly in the code:
-1. Open `index.html`
-2. Find line 13: `API_KEY: import.meta.env.VITE_GEMINI_API_KEY || ""`
-3. Replace with your API key:
-   ```javascript
-   API_KEY: "your_actual_api_key_here"
-   ```
-
 ### 3. Test the Configuration
 
 1. Save the file

@@ -6,13 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Zerify</title>
     <script>
-      // Shim for process.env.API_KEY for local development without a build step.
-      // In a real production environment, this would be handled by a build process.
-      // For this local setup, replace the empty string with your Gemini API key.
-      // IMPORTANT: Do not commit your API key to version control.
+      // Environment variables will be loaded from .env file
+      // Make sure to create .env.local with your API keys
       window.process = {
         env: {
-          API_KEY: "" // PASTE YOUR GEMINI API KEY HERE
+          API_KEY: import.meta.env.VITE_GEMINI_API_KEY || ""
         }
       };
     </script>

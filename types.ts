@@ -99,3 +99,51 @@ export interface WatchlistItem {
   reporter: string; // Wallet address of the user who submitted it
   url: string;
 }
+
+export interface StakeTransaction {
+  id: string;
+  type: 'stake' | 'unstake';
+  amount: string;
+  timestamp: number;
+  txHash?: string;
+  status: 'pending' | 'completed' | 'failed';
+}
+
+export interface ReputationVote {
+  id: string;
+  voter: string;
+  source: string;
+  credibility: number; // 1-10 scale
+  timestamp: number;
+  txHash?: string;
+  weight: number; // Based on voter's reputation
+}
+
+export interface ReputationNFT {
+  id: string;
+  owner: string;
+  reputation: number;
+  source: string;
+  mintedAt: number;
+  tokenId: string;
+  metadata: {
+    name: string;
+    description: string;
+    image: string;
+    attributes: Array<{
+      trait_type: string;
+      value: string | number;
+    }>;
+  };
+}
+
+export interface ReputationStake {
+  id: string;
+  staker: string;
+  source: string;
+  amount: number;
+  timestamp: number;
+  duration: number; // Days
+  rewards: number;
+  status: 'active' | 'completed' | 'withdrawn';
+}
